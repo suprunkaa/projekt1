@@ -34,19 +34,19 @@ if menu == "Kategorie":
             submitted = st.form_submit_button("Zapisz kategorię")
             
             if submitted and nazwa:
-                supabase.table("Kategorie").insert({"nazwa": nazwa, "opis": opis}).execute()
+                supabase.table("kategorie").insert({"nazwa": nazwa, "opis": opis}).execute()
                 st.success("Dodano kategorię!")
                 st.rerun()
 
     # Wyświetlanie i usuwanie
-    data = get_data("Kategorie")
+    data = get_data("kategorie")
     if data.data:
         for item in data.data:
             col1, col2, col3 = st.columns([3, 5, 1])
             col1.write(f"**{item['nazwa']}**")
             col2.write(item['opis'])
             if col3.button("🗑️", key=f"del_kat_{item['id']}"):
-                delete_row("Kategorie", item['id'])
+                delete_row("kategorie", item['id'])
     else:
         st.info("Brak kategorii w bazie.")
 
@@ -55,7 +55,7 @@ elif menu == "Produkty":
     st.header("🛒 Zarządzanie Produktami")
 
     # Pobieranie kategorii do dropdowna
-    kategorie_data = get_data("Kategorie").data
+    kategorie_data = get_data("kategorie").data
     kat_dict = {k['nazwa']: k['id'] for k in kategorie_data}
 
     # Formularz dodawania
@@ -67,7 +67,7 @@ elif menu == "Produkty":
                 nazwa = st.text_input("Nazwa produktu")
                 liczba = st.number_input("Ilość (liczba)", min_value=0, step=1)
                 cena = st.number_input("Cena", min_value=0.0, format="%.2f")
-                kat_nazwa = st.selectbox("Kategoria", options=list(kat_dict.keys()))
+                kat_nazwa = st.selectbox("kategoria", options=list(kat_dict.keys()))
                 
                 submitted = st.form_submit_button("Zapisz produkt")
                 
