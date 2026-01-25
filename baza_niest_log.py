@@ -4,67 +4,59 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# --- KONFIGURACJA STRONY ---
+# --- KONFIGURACJA UI ---
 st.set_page_config(page_title="Logistics Intelligence OS", layout="wide")
 
-# --- CUSTOM CSS: NATURALNE TŁO + MOCNE SZKŁO ---
+# --- CUSTOM CSS: LOGISTYKA & GLASSMORPHISM ---
 st.markdown("""
     <style>
-    /* Naturalne tło magazynu bez nakładek kolorystycznych */
+    /* Dynamiczne tło logistyczne z nakładką */
     .stApp {
-        background: url("https://images.unsplash.com/photo-1587293855946-90c5df244543?q=80&w=2070&auto=format&fit=crop");
+        background: linear-gradient(rgba(15, 23, 42, 0.6), rgba(15, 23, 42, 0.6)), 
+                    url("https://images.unsplash.com/photo-1580674285054-bed31e145f59?q=80&w=2070&auto=format&fit=crop");
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
     }
 
-    /* Karty Glassmorphism - mocne rozmycie tła zamiast koloru */
+    /* Szklane karty (Glassmorphism) */
     .glass-card {
-        background: rgba(255, 255, 255, 0.15); /* Prawie przezroczyste */
-        backdrop-filter: blur(20px) saturate(180%); /* Tu dzieje się magia */
-        -webkit-backdrop-filter: blur(20px) saturate(180%);
-        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 20px;
         padding: 25px;
-        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         margin-bottom: 20px;
-        color: white; /* Tekst biały, aby odbijał od rozmytego tła */
     }
 
-    /* Nagłówki z cieniem dla lepszej czytelności na tle */
-    h1, h2, h3 {
-        color: white !important;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-        font-weight: 800 !important;
-    }
-
-    /* Metryki - neonowy błękit dla kontrastu */
+    /* Stylizacja metryk */
     [data-testid="stMetricValue"] {
-        color: #00d4ff !important;
-        font-size: 2.2rem !important;
-        text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        color: #60a5fa !important;
+        font-size: 1.8rem !important;
+        font-weight: 800 !important;
     }
     
     [data-testid="stMetricLabel"] {
-        color: #e0e0e0 !important;
+        color: #cbd5e1 !important;
+        text-transform: uppercase;
         letter-spacing: 1px;
     }
 
     /* Przycisk akcji */
     .stButton>button {
-        background: linear-gradient(135deg, #00d4ff 0%, #0072ff 100%) !important;
-        color: white !important;
-        border: none !important;
-        padding: 12px 30px !important;
-        border-radius: 12px !important;
-        font-weight: bold !important;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 12px;
+        font-weight: bold;
+        transition: all 0.4s ease;
+        width: 100%;
     }
-    
-    /* Tabela - tło dopasowane do kart */
-    .stDataFrame {
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 15px;
+    .stButton>button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -75,89 +67,105 @@ key = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
 @st.cache_data(ttl=30)
-def fetch_data():
+def fetch_all_data():
     p = supabase.table("produkty").select("*").execute().data
     k = supabase.table("kategorie").select("*").execute().data
     return pd.DataFrame(p), pd.DataFrame(k)
 
-# --- NAGŁÓWEK ---
-st.title("📦 Logistics Command Center")
-st.markdown("### Monitorowanie Operacyjne Magazynu")
+# --- LAYOUT APLIKACJI ---
+st.title("🌐 Logistics Command Center v3.0")
+st.markdown("Automatyzacja i Monitoring Zasobów Magazynowych")
 
 try:
-    df_p, df_k = fetch_data()
+    df_p, df_k = fetch_all_data()
     
     if not df_p.empty and not df_k.empty:
         df = df_p.merge(df_k, left_on="kategoria_id", right_on="id", suffixes=('_p', '_k'))
         df['total_val'] = df['cena'] * df['liczba']
 
-        # --- SEKCJA 1: WSKAŹNIKI (W KARTACH) ---
+        # --- SEKCJA 1: INTELIGENTNE WSKAŹNIKI ---
         m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            st.metric("Kapitał", f"{df['total_val'].sum():,.0f} PLN")
-            st.markdown("</div>", unsafe_allow_html=True)
-        with m2:
-            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            st.metric("Indeksy SKU", len(df))
-            st.markdown("</div>", unsafe_allow_html=True)
-        with m3:
-            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            st.metric("Suma sztuk", int(df['liczba'].sum()))
-            st.markdown("</div>", unsafe_allow_html=True)
+        with m1: st.metric("Kapitał w towarze", f"{df['total_val'].sum():,.2f} zł")
+        with m2: st.metric("Liczba SKU", len(df))
+        with m3: st.metric("Jednostki ogółem", int(df['liczba'].sum()))
         with m4:
-            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            n_alert = len(df[df['liczba'] < 10])
-            st.metric("Alerty", n_alert, delta="Braki" if n_alert > 0 else "OK")
-            st.markdown("</div>", unsafe_allow_html=True)
+            low_stock_count = len(df[df['liczba'] < 10])
+            st.metric("Alerty zapasów", low_stock_count, delta="- Krytyczne" if low_stock_count > 0 else "OK")
 
-        # --- SEKCJA 2: WYKRESY ---
-        col_l, col_r = st.columns([1.6, 1])
+        st.write("##")
 
-        with col_l:
+        # --- SEKCJA 2: ANALITYKA PREMIUM ---
+        col_left, col_right = st.columns([1.6, 1])
+
+        with col_left:
             st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            st.subheader("📊 Poziomy zapasów")
-            fig = px.bar(df, x="nazwa_p", y="liczba", color="nazwa_k",
-                         template="plotly_dark", barmode="group",
-                         color_discrete_sequence=px.colors.sequential.Cyan_r)
-            fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+            st.subheader("📦 Monitoring Stanów Magazynowych")
+            # Wykres z gradientem
+            fig = px.area(df.sort_values('liczba', ascending=False), 
+                          x="nazwa_p", y="liczba", color="nazwa_k",
+                          template="plotly_dark", line_shape="spline")
+            fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                              xaxis_title="", yaxis_title="Ilość (szt)")
             st.plotly_chart(fig, use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with col_r:
+        with col_right:
             st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            st.subheader("💰 Udział wartości")
-            fig2 = px.pie(df, values='total_val', names='nazwa_k', hole=0.6)
+            st.subheader("💰 Struktura Wartości")
+            # Wykres Donut 3D-style
+            fig2 = go.Figure(data=[go.Pie(labels=df['nazwa_k'], values=df['total_val'], hole=.5)])
+            fig2.update_traces(hoverinfo='label+percent', textinfo='value', 
+                               marker=dict(colors=px.colors.sequential.RdBu))
             fig2.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', showlegend=False)
             st.plotly_chart(fig2, use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # --- SEKCJA 3: PANEL ZARZĄDZANIA ---
+        # --- SEKCJA 3: INTERAKTYWNY PANEL ZARZĄDZANIA ---
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-        st.subheader("⚙️ Zarządzanie Bazą")
-        t1, t2, t3 = st.tabs(["📋 Widok Tabeli", "➕ Dodaj Towar", "🗑️ Usuń"])
+        t1, t2, t3 = st.tabs(["📋 Baza Danych", "⚙️ Kontrola Zasobów", "➕ Operacje"])
         
         with t1:
-            st.dataframe(df[['id_p', 'nazwa_p', 'liczba', 'cena', 'nazwa_k']], use_container_width=True)
+            query = st.text_input("Szukaj produktu lub kategorii...")
+            if query:
+                df_view = df[df['nazwa_p'].str.contains(query, case=False) | df['nazwa_k'].str.contains(query, case=False)]
+            else:
+                df_view = df
+            st.dataframe(df_view[['id_p', 'nazwa_p', 'liczba', 'cena', 'nazwa_k', 'total_val']], 
+                         use_container_width=True, hide_index=True)
             
         with t2:
-            with st.form("add_form"):
-                f1, f2, f3 = st.columns(3)
-                name = f1.text_input("Nazwa")
-                qty = f2.number_input("Ilość", min_value=1)
-                price = f3.number_input("Cena", min_value=0.01)
-                kat = st.selectbox("Kategoria", df_k['nazwa'].unique())
-                if st.form_submit_button("DODAJ PRODUKT"):
-                    k_id = int(df_k[df_k['nazwa']==kat]['id'].values[0])
-                    supabase.table("produkty").insert({"nazwa":name, "liczba":qty, "cena":price, "kategoria_id":k_id}).execute()
-                    st.rerun()
-                    
-        with t3:
-            del_id = st.number_input("ID do usunięcia", step=1)
-            if st.button("USUŃ Z BAZY"):
+            st.write("### Szybka Edycja / Usuwanie")
+            c_del1, c_del2 = st.columns(2)
+            del_id = c_del1.number_input("Wpisz ID produktu do usunięcia", step=1)
+            if c_del1.button("USUŃ DEFINITYWNIE"):
                 supabase.table("produkty").delete().eq("id", del_id).execute()
+                st.success("Rekord został usunięty z serwera.")
                 st.rerun()
+            
+            c_del2.info("Wskazówka: ID produktu znajdziesz w zakładce Baza Danych.")
+
+        with t3:
+            st.write("### Dodaj Nowe Zasoby")
+            ca, cb = st.columns(2)
+            with ca:
+                with st.form("add_p"):
+                    st.write("**Nowy Produkt**")
+                    p_name = st.text_input("Nazwa przedmiotu")
+                    p_qty = st.number_input("Ilość", min_value=0)
+                    p_price = st.number_input("Cena jedn.", min_value=0.0)
+                    p_kat = st.selectbox("Kategoria", df_k['nazwa'].unique())
+                    if st.form_submit_button("DODAJ PRODUKT"):
+                        k_id = int(df_k[df_k['nazwa']==p_kat]['id'].values[0])
+                        supabase.table("produkty").insert({"nazwa":p_name, "liczba":p_qty, "cena":p_price, "kategoria_id":k_id}).execute()
+                        st.rerun()
+            with cb:
+                with st.form("add_k"):
+                    st.write("**Nowa Kategoria**")
+                    k_name = st.text_input("Nazwa kategorii")
+                    if st.form_submit_button("DODAJ KATEGORIĘ"):
+                        supabase.table("kategorie").insert({"nazwa":k_name}).execute()
+                        st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
 except Exception as e:
-    st.error(f"Błąd: {e}")
+    st.error(f"⚠️ Błąd krytyczny połączenia: {e}")
