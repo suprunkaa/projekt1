@@ -2,222 +2,136 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
+import segno
+import io
 
-# --- KONFIGURACJA UI ---
-st.set_page_config(page_title="Magazyn Pro | Command Center", layout="wide", initial_sidebar_state="collapsed")
+# --- KONFIGURACJA STRONY ---
+st.set_page_config(page_title="Logistic Intelligence OS", layout="wide")
 
-# --- CUSTOM CSS: NOWOCZESNY DESIGN ---
+# --- DESIGN: DARK GLASSMORPHISM ---
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
-
-    html, body, [data-testid="stsidebar"] {
-        font-family: 'Inter', sans-serif;
-    }
-
-    /* Tło z efektem głębi */
     .stApp {
-        background: radial-gradient(circle at top right, rgba(29, 78, 216, 0.15), transparent),
-                    linear-gradient(rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.95)), 
-                    url("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2070&auto=format&fit=crop");
+        background: linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 10, 30, 0.9)), 
+                    url("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2070");
         background-size: cover;
         background-attachment: fixed;
     }
-
-    /* Nowoczesne karty szklane */
     .glass-card {
-        background: rgba(30, 41, 59, 0.5);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 24px;
-        padding: 2rem;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-        margin-bottom: 25px;
-        transition: transform 0.3s ease;
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(15px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        padding: 25px;
+        margin-bottom: 20px;
     }
-
-    /* Efekt po najechaniu na kartę */
-    .glass-card:hover {
-        border: 1px solid rgba(59, 130, 246, 0.5);
-    }
-
-    /* Stylizacja metryk (KPI) */
-    [data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: 16px;
-        padding: 15px !important;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    [data-testid="stMetricValue"] {
-        color: #38bdf8 !important; /* Cyjanowy błękit */
-        font-weight: 800 !important;
-        letter-spacing: -1px;
-    }
-
-    /* Przycisk akcji - Gradientowy */
-    .stButton>button {
-        background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%) !important;
-        color: white !important;
-        border: none !important;
-        padding: 0.75rem 2rem !important;
-        border-radius: 12px !important;
-        font-weight: 700 !important;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-    
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4);
-    }
-
-    /* Stylizacja Tabel */
-    .stDataFrame {
-        border-radius: 12px;
-        overflow: hidden;
-    }
+    h1, h2, h3 { color: #60a5fa !important; text-shadow: 0 0 10px rgba(96, 165, 250, 0.3); }
+    .stMetric { background: rgba(0,0,0,0.4); border-radius: 15px; padding: 15px; border: 1px solid #1e293b; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- POŁĄCZENIE Z BAZĄ ---
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-supabase: Client = create_client(url, key)
+# Dane pobierane z ustawień Streamlit Cloud (Secrets)
+@st.cache_resource
+def init_db():
+    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
-@st.cache_data(ttl=30)
-def fetch_all_data():
-    try:
-        p = supabase.table("produkty").select("*").execute().data
-        k = supabase.table("kategorie").select("*").execute().data
-        return pd.DataFrame(p), pd.DataFrame(k)
-    except:
-        return pd.DataFrame(), pd.DataFrame()
+supabase = init_db()
 
-# --- NAGŁÓWEK ---
-col_head1, col_head2 = st.columns([3, 1])
-with col_head1:
-    st.title("🛰️ Magazyn Command Center")
-    st.caption("v3.5 Platinum Edition | System Monitorowania Operacyjnego")
-
-# --- LOGIKA DANYCH ---
-try:
-    df_p, df_k = fetch_all_data()
-    
+def fetch_data():
+    # Pobieramy dane z Twoich tabel: produkty i kategorie
+    p = supabase.table("produkty").select("*").execute().data
+    k = supabase.table("kategorie").select("*").execute().data
+    df_p = pd.DataFrame(p)
+    df_k = pd.DataFrame(k)
     if not df_p.empty and not df_k.empty:
-        df = df_p.merge(df_k, left_on="kategoria_id", right_on="id", suffixes=('_p', '_k'))
-        df['total_val'] = df['cena'] * df['liczba']
+        # Łączymy po ID kategorii zgodnie z Twoim schematem
+        return df_p.merge(df_k, left_on="kategoria_id", right_on="id", suffixes=('_prod', '_kat'))
+    return pd.DataFrame()
 
-        # --- SEKCJA 1: KPI (Metric Cards) ---
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Wartość Aktywów", f"{df['total_val'].sum():,.2f} zł")
-        m2.metric("Unikalne SKU", len(df))
-        m3.metric("Sztuki w Magazynie", int(df['liczba'].sum()))
-        
-        low_stock = len(df[df['liczba'] < 10])
-        status_color = "normal" if low_stock == 0 else "inverse"
-        m4.metric("Alerty Zapasu", low_stock, delta=f"{low_stock} SKU Low", delta_color=status_color)
+# --- INTERFEJS GŁÓWNY ---
+st.title("🛰️ Command Center: Logistyka")
+df = fetch_data()
 
-        st.markdown("---")
+if not df.empty:
+    df['wartosc_magazynu'] = df['cena'] * df['liczba']
+    
+    # --- KPI (Statystyki) ---
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: st.metric("Wartość Towaru", f"{df['wartosc_magazynu'].sum():,.2f} zł")
+    with c2: st.metric("Produkty (SKU)", len(df))
+    with c3: st.metric("Suma Sztuk", int(df['liczba'].sum()))
+    with c4:
+        braki = len(df[df['liczba'] < 5])
+        st.metric("Alerty", braki, delta="- Uzupelnij" if braki > 0 else "OK", delta_color="inverse")
 
-        # --- SEKCJA 2: ANALITYKA WIZUALNA ---
-        col_l, col_r = st.columns([1.6, 1])
+    st.write("##")
 
-        with col_l:
-            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            st.subheader("📈 Przepływ Towarowy (SKU/Ilość)")
-            
-            # Nowoczesny wykres z linią trendu (Spline)
-            fig = px.area(df.sort_values('liczba', ascending=False), 
-                          x="nazwa_p", y="liczba", color="nazwa_k",
-                          template="plotly_dark", line_shape="spline",
-                          color_discrete_sequence=px.colors.sequential.Electric)
-            
-            fig.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)', 
-                plot_bgcolor='rgba(0,0,0,0)',
-                xaxis={'showgrid': False},
-                yaxis={'showgrid': True, 'gridcolor': 'rgba(255,255,255,0.05)'},
-                margin=dict(l=0, r=0, t=20, b=0)
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with col_r:
-            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            st.subheader("💎 Podział Wartościowy")
-            
-            # Wykres Donut "Glow"
-            fig2 = go.Figure(data=[go.Pie(labels=df['nazwa_k'], values=df['total_val'], hole=.6)])
-            fig2.update_traces(
-                hoverinfo='label+percent', 
-                textinfo='none',
-                marker=dict(colors=px.colors.sequential.Icefire_r, line=dict(color='rgba(0,0,0,0)', width=2))
-            )
-            fig2.update_layout(
-                template="plotly_dark", 
-                paper_bgcolor='rgba(0,0,0,0)', 
-                showlegend=True,
-                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        # --- SEKCJA 3: PANEL OPERACYJNY ---
+    # --- ANALITYKA (Wykresy) ---
+    col_l, col_r = st.columns([1.5, 1])
+    
+    with col_l:
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-        st.subheader("🛠️ Zarządzanie Zasobami")
-        
-        t1, t2, t3 = st.tabs(["📋 Rejestr Systemowy", "⚙️ Modyfikacja", "➕ Nowa Dostawa"])
-        
-        with t1:
-            search_col, filter_col = st.columns([2, 1])
-            query = search_col.text_input("🔍 Szybkie szukanie (Nazwa/Kategoria)...")
-            
-            if query:
-                df_view = df[df['nazwa_p'].str.contains(query, case=False) | df['nazwa_k'].str.contains(query, case=False)]
-            else:
-                df_view = df
-            
-            st.dataframe(df_view[['id_p', 'nazwa_p', 'liczba', 'cena', 'nazwa_k', 'total_val']], 
-                         use_container_width=True, hide_index=True)
-            
-        with t2:
-            st.write("### Tryb Administracyjny")
-            c_ed1, c_ed2 = st.columns(2)
-            del_id = c_ed1.number_input("Wpisz ID produktu do usunięcia", step=1, min_value=1)
-            
-            if c_ed1.button("🔥 USUŃ PERMANENTNIE"):
-                with st.spinner("Usuwanie..."):
-                    supabase.table("produkty").delete().eq("id", del_id).execute()
-                    st.toast(f"Usunięto rekord {del_id}", icon="✅")
-                    st.rerun()
-            
-            c_ed2.info("Pamiętaj: Operacji usunięcia nie można cofnąć. Sprawdź dwukrotnie ID w tabeli obok.")
-
-        with t3:
-            st.write("### Formularz Przyjęcia Towaru")
-            with st.form("main_form", clear_on_submit=True):
-                c_f1, c_f2, c_f3 = st.columns(3)
-                p_name = c_f1.text_input("Nazwa Produktu")
-                p_qty = c_f2.number_input("Ilość", min_value=1)
-                p_price = c_f3.number_input("Cena Netto", min_value=0.01)
-                
-                p_kat = st.selectbox("Wybierz Kategorę Magazynową", df_k['nazwa'].unique())
-                
-                if st.form_submit_button("✅ DODAJ DO SYSTEMU"):
-                    k_id = int(df_k[df_k['nazwa'] == p_kat]['id'].values[0])
-                    supabase.table("produkty").insert({
-                        "nazwa": p_name, "liczba": p_qty, "cena": p_price, "kategoria_id": k_id
-                    }).execute()
-                    st.toast("Produkt dodany pomyślnie!", icon="🚀")
-                    st.rerun()
+        st.subheader("📊 Stan Zapasu per Produkt")
+        fig = px.bar(df, x="nazwa_prod", y="liczba", color="nazwa_kat", 
+                     template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Bold)
+        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    else:
-        st.warning("Baza danych jest pusta. Dodaj pierwszą kategorię, aby rozpocząć.")
+    with col_r:
+        st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+        st.subheader("🥧 Udział Kategorii")
+        fig2 = px.pie(df, values='wartosc_magazynu', names='nazwa_kat', hole=0.5, template="plotly_dark")
+        fig2.update_layout(paper_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig2, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-except Exception as e:
-    st.error(f"🛰️ Utrata sygnału z bazą: {e}")
+    # --- OPERACJE (Tabs) ---
+    t_data, t_qr, t_add, t_del = st.tabs(["📋 Rejestr", "📱 Kody QR", "➕ Dodaj", "🗑️ Usuń"])
+
+    with t_data:
+        st.dataframe(df[['id_prod', 'nazwa_prod', 'liczba', 'cena', 'nazwa_kat']], use_container_width=True)
+
+    with t_qr:
+        st.subheader("Generowanie Etykiet")
+        wybor = st.selectbox("Wybierz produkt do etykiety", df['nazwa_prod'].unique())
+        p_data = df[df['nazwa_prod'] == wybor].iloc[0]
+        
+        # QR Code z Segno
+        qr = segno.make(f"ID:{p_data['id_prod']} | {p_data['nazwa_prod']}")
+        out = io.BytesIO()
+        qr.save(out, kind='png', scale=10)
+        st.image(out.getvalue(), width=200, caption=f"QR dla {wybor}")
+
+    with t_add:
+        c_a, c_b = st.columns(2)
+        with c_a:
+            with st.form("add_p"):
+                st.write("### Dodaj Produkt")
+                n = st.text_input("Nazwa produktu")
+                l = st.number_input("Ilość", min_value=0)
+                c = st.number_input("Cena", min_value=0.0)
+                k = st.selectbox("Kategoria", df['nazwa_kat'].unique())
+                if st.form_submit_button("Zapisz Produkt"):
+                    k_id = int(df[df['nazwa_kat'] == k]['id_kat'].values[0])
+                    supabase.table("produkty").insert({"nazwa":n, "liczba":l, "cena":c, "kategoria_id":k_id}).execute()
+                    st.rerun()
+        with c_b:
+            with st.form("add_k"):
+                st.write("### Nowa Kategoria")
+                kn = st.text_input("Nazwa nowej kategorii")
+                if st.form_submit_button("Utwórz"):
+                    supabase.table("kategorie").insert({"nazwa":kn}).execute()
+                    st.rerun()
+
+    with t_del:
+        st.warning("Usuwanie danych z bazy")
+        target_id = st.number_input("Wpisz ID do usunięcia", step=1)
+        if st.button("🔴 POTWIERDŹ USUNIĘCIE"):
+            supabase.table("produkty").delete().eq("id", target_id).execute()
+            st.success("Produkt usunięty!")
+            st.rerun()
+
+else:
+    st.info("Baza danych jest pusta lub brak połączenia.")
