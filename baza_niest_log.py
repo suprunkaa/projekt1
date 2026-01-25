@@ -3,78 +3,47 @@ from supabase import create_client, Client
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from datetime import datetime
 
 # --- KONFIGURACJA UI ---
-st.set_page_config(page_title="Logistics Command Center", layout="wide")
+st.set_page_config(page_title="Logistics Command Center PRO", layout="wide")
 
 # --- CUSTOM CSS: NATURALNE TŁO + MAKSYMALNA CZYTELNOŚĆ ---
 st.markdown("""
     <style>
-    /* 1. Naturalne tło magazynu */
     .stApp {
         background: url("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2070&auto=format&fit=crop");
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
     }
-
-    /* 2. Karty - Mocne rozmycie (Blur) i przyciemnienie dla czytelności */
     .glass-card {
-        background: rgba(15, 23, 42, 0.55); /* Ciemniejsza baza pod białe napisy */
+        background: rgba(15, 23, 42, 0.65);
         backdrop-filter: blur(20px) saturate(160%);
-        -webkit-backdrop-filter: blur(20px);
         border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 25px;
-        padding: 30px;
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-        margin-bottom: 25px;
+        border-radius: 20px;
+        padding: 25px;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+        margin-bottom: 20px;
     }
-
-    /* 3. Napisy - Dodany mocny cień dla odcięcia od tła */
     h1, h2, h3, p, span, label {
         color: #ffffff !important;
-        text-shadow: 2px 2px 8px rgba(0, 0, 0, 1), 0px 0px 15px rgba(0, 0, 0, 0.8) !important;
-        font-weight: 700 !important;
-    }
-
-    /* 4. Metryki - Jaskrawy cyjan (bardzo czytelny) */
-    [data-testid="stMetricValue"] {
-        color: #00e5ff !important;
-        font-size: 2.3rem !important;
-        font-weight: 900 !important;
-        text-shadow: 0px 0px 15px rgba(0, 229, 255, 0.4) !important;
-    }
-    
-    [data-testid="stMetricLabel"] {
-        color: #cbd5e1 !important;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        font-size: 0.9rem !important;
-    }
-
-    /* 5. Kontrola formularzy - Wysoki kontrast białego tła */
-    .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
-        background-color: rgba(255, 255, 255, 1) !important;
-        color: #0f172a !important;
-        border-radius: 10px !important;
+        text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9) !important;
         font-weight: 600 !important;
     }
-
-    /* 6. Przyciski - Gradient logistyczny */
-    .stButton>button {
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
-        color: white !important;
-        border: none !important;
-        padding: 14px 30px !important;
-        border-radius: 12px !important;
+    [data-testid="stMetricValue"] {
+        color: #00e5ff !important;
+        font-size: 2rem !important;
         font-weight: 800 !important;
-        letter-spacing: 1px;
-        transition: all 0.3s ease !important;
     }
-    .stButton>button:hover {
-        transform: scale(1.03);
-        box-shadow: 0 0 20px rgba(59, 130, 246, 0.6) !important;
+    .stButton>button {
+        background: linear-gradient(135deg, #00d4ff 0%, #0072ff 100%) !important;
+        color: white !important;
+        font-weight: bold !important;
+        border-radius: 10px !important;
     }
+    /* Styl dla tabeli */
+    .stDataFrame { background: rgba(255, 255, 255, 0.05); border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -85,16 +54,12 @@ supabase: Client = create_client(url, key)
 
 @st.cache_data(ttl=20)
 def fetch_data():
-    try:
-        p = supabase.table("produkty").select("*").execute().data
-        k = supabase.table("kategorie").select("*").execute().data
-        return pd.DataFrame(p), pd.DataFrame(k)
-    except:
-        return pd.DataFrame(), pd.DataFrame()
+    p = supabase.table("produkty").select("*").execute().data
+    k = supabase.table("kategorie").select("*").execute().data
+    return pd.DataFrame(p), pd.DataFrame(k)
 
-# --- INTERFEJS ---
-st.title("🛰️ Logistics Command Center v4.0")
-st.markdown("### System Monitoringu i Zarządzania Zapasami")
+# --- LOGIKA APLIKACJI ---
+st.title("🛰️ Logistics Intelligence OS")
 
 try:
     df_p, df_k = fetch_data()
@@ -103,65 +68,88 @@ try:
         df = df_p.merge(df_k, left_on="kategoria_id", right_on="id", suffixes=('_p', '_k'))
         df['wartosc'] = df['cena'] * df['liczba']
 
-        # --- KPI ---
+        # --- SEKCJA 1: RAPORTY I EXPORT ---
+        with st.sidebar:
+            st.markdown("### 📊 Centrum Raportów")
+            csv = df[['nazwa_p', 'liczba', 'cena', 'nazwa_k', 'wartosc']].to_csv(index=False).encode('utf-8-sig')
+            st.download_button(
+                label="📥 Pobierz Raport Stanu (CSV)",
+                data=csv,
+                file_name=f"raport_magazyn_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime='text/csv',
+            )
+            st.info("Raport zawiera aktualne stany magazynowe i wycenę.")
+
+        # --- SEKCJA 2: KPI ---
         c1, c2, c3, c4 = st.columns(4)
-        kpis = [
-            ("Kapitał Towarowy", f"{df['wartosc'].sum():,.2f} zł"),
-            ("Jednostki SKU", len(df)),
-            ("Stan Magazynu", int(df['liczba'].sum())),
-            ("Alerty Krytyczne", len(df[df['liczba'] < 5]))
-        ]
-        
-        for i, (lab, val) in enumerate(kpis):
-            with [c1, c2, c3, c4][i]:
-                st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-                st.metric(lab, val)
-                st.markdown("</div>", unsafe_allow_html=True)
-
-        # --- WYKRESY ---
-        col_chart1, col_chart2 = st.columns([1.5, 1])
-        
-        with col_chart1:
+        with c1:
             st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            st.subheader("📊 Monitoring Poziomu Zapasów")
-            fig = px.bar(df, x="nazwa_p", y="liczba", color="nazwa_k", template="plotly_dark")
-            fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig, use_container_width=True)
+            st.metric("Suma Aktywów", f"{df['wartosc'].sum():,.2f} zł")
+            st.markdown("</div>", unsafe_allow_html=True)
+        with c2:
+            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+            st.metric("Asortyment (SKU)", len(df))
+            st.markdown("</div>", unsafe_allow_html=True)
+        with c3:
+            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+            st.metric("Stan Całkowity", int(df['liczba'].sum()))
+            st.markdown("</div>", unsafe_allow_html=True)
+        with c4:
+            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+            low = len(df[df['liczba'] < 10])
+            st.metric("Do uzupełnienia", low, delta="- Braki" if low > 0 else "OK")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with col_chart2:
-            st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-            st.subheader("💰 Podział Wartościowy")
-            fig2 = go.Figure(data=[go.Pie(labels=df['nazwa_k'], values=df['wartosc'], hole=.5)])
-            fig2.update_layout(template="plotly_dark", paper_bgcolor='rgba(0,0,0,0)', showlegend=False)
-            st.plotly_chart(fig2, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        # --- OPERACJE ---
+        # --- SEKCJA 3: PANEL ZARZĄDZANIA ---
         st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-        tab1, tab2, tab3 = st.tabs(["📋 Rejestr", "➕ Nowa Dostawa", "🗑️ Usuwanie"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📋 Rejestr", "🚛 Planowanie Dostaw", "➕ Nowa Dostawa", "🗑️ Usuń"])
         
         with tab1:
-            st.dataframe(df[['id_p', 'nazwa_p', 'liczba', 'cena', 'nazwa_k']], use_container_width=True)
+            st.subheader("Aktualny inwentarz")
+            st.dataframe(df[['id_p', 'nazwa_p', 'liczba', 'cena', 'nazwa_k', 'wartosc']], use_container_width=True)
             
         with tab2:
-            with st.form("add"):
-                fa, fb, fc = st.columns(3)
-                n = fa.text_input("Nazwa produktu")
-                l = fb.number_input("Ilość", min_value=1)
-                c = fc.number_input("Cena", min_value=0.01)
-                k = st.selectbox("Wybierz kategorię", df_k['nazwa'].unique())
-                if st.form_submit_button("DODAJ DO BAZY"):
-                    kid = int(df_k[df_k['nazwa']==k]['id'].values[0])
-                    supabase.table("produkty").insert({"nazwa":n, "liczba":l, "cena":c, "kategoria_id":kid}).execute()
-                    st.rerun()
+            st.subheader("Harmonogram nadchodzących dostaw")
+            # Prosta tabela do wizualizacji dostaw (możesz ją potem połączyć z bazą Supabase)
+            dostawy_mock = pd.DataFrame({
+                "Data": ["2024-05-20", "2024-05-22"],
+                "Dostawca": ["Dachser", "DHL Freight"],
+                "Status": ["W drodze", "Zaplanowano"],
+                "Towar": ["Elektronika", "Palety drewniane"]
+            })
+            st.table(dostawy_mock)
+            st.info("Funkcja planowania pozwala uniknąć zatorów na rampie rozładunkowej.")
 
         with tab3:
-            did = st.number_input("Podaj ID do usunięcia", step=1, value=0)
-            if st.button("🔴 POTWIERDŹ USUNIĘCIE"):
-                supabase.table("produkty").delete().eq("id", did).execute()
+            with st.form("new_delivery"):
+                st.write("### Przyjęcie nowego towaru")
+                f1, f2, f3 = st.columns(3)
+                n = f1.text_input("Nazwa produktu")
+                l = f2.number_input("Ilość (szt/kg)", min_value=1)
+                c = f3.number_input("Cena zakupu netto", min_value=0.01)
+                k = st.selectbox("Kategoria systemowa", df_k['nazwa'].unique())
+                if st.form_submit_button("✅ POTWIERDŹ PRZYJĘCIE"):
+                    kid = int(df_k[df_k['nazwa']==k]['id'].values[0])
+                    supabase.table("produkty").insert({"nazwa":n, "liczba":l, "cena":c, "kategoria_id":kid}).execute()
+                    st.success(f"Dodano: {n}")
+                    st.rerun()
+
+        with tab4:
+            st.subheader("Usuwanie rekordów")
+            del_id = st.number_input("Podaj ID do trwałego usunięcia", step=1, value=0)
+            if st.button("🔴 USUŃ Z BAZY"):
+                supabase.table("produkty").delete().eq("id", del_id).execute()
+                st.warning(f"Usunięto produkt o ID {del_id}")
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
+        # --- SEKCJA 4: ANALITYKA ---
+        st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+        st.subheader("📈 Analiza trendów magazynowych")
+        fig = px.area(df, x="nazwa_p", y="liczba", color="nazwa_k", template="plotly_dark", line_shape="spline")
+        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
 except Exception as e:
-    st.error(f"⚠️ Utrata połączenia: {e}")
+    st.error(f"⚠️ Problem z systemem: {e}")
